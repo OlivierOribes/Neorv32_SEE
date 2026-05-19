@@ -1,4 +1,16 @@
-# SEU-Resilient NEORV32 RISC-V Core
+<h1 align="center">
+Radiation-Tolerant NEORV32 RISC-V Processor
+</h1>
+
+<p align="center">
+  <img src="docs/img/risc_v_space_banner.png" width="900">
+</p>
+
+---
+
+<p align="center">
+Research project on radiation effects and fault tolerance for space-oriented RISC-V systems
+</p>
 
 Student research project at **ISAE-SUPAERO** focused on improving the resilience of a **RISC-V soft-core processor** against **Single Event Effects (SEEs)** induced by radiation effects in embedded and aerospace environments. The project is based on the **[NEORV32 RISC-V CPU v1.13.1](https://github.com/stnolting/neorv32?tab=readme-ov-file)**, which is extended and modified at the RTL level to evaluate and implement hardware fault-tolerance mechanisms.
 
