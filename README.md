@@ -3,7 +3,7 @@ Radiation-Tolerant NEORV32 RISC-V Processor
 </h1>
 
 <p align="center">
-  <img src="docs/img/risc_v_space_banner.png" width="900">
+  <img src="docs/img/Risc-V_for_space.png" width="900">
 </p>
 
 ---
