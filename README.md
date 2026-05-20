@@ -382,36 +382,22 @@ and carefully follow the instructions displayed in the terminal.
 
 ### 9.5 Write and Run Your Own Program
 
-You can create and execute your own C applications on the NEORV32 processor.
-
-#### Compile and Run the Program
-
-Run:
-
-```bash
-./compile_neorv32.sh
-```
-
-The selected example defined by `DEFAULT_EXAMPLE` inside the script will:
-- be compiled with the RISC-V GCC toolchain,
-- converted into a NEORV32 executable binary,
-- uploaded through UART,
-- and executed on the CPU.
+You can create and execute custom C applications on the NEORV32 processor.
 
 #### Custom Standalone Programs
 
-The repository also includes a generic `Makefile` inside:
+The repository includes a generic `Makefile` located in:
 
 ```text
 C_Test_Program/
 ```
 
-This Makefile can be adapted for standalone C applications.
+This Makefile can be used for standalone C applications.
 
 Requirements:
 - the source file must be named `main.c`,
 - the RISC-V GCC toolchain must be installed,
-- and the compilation steps described previously must be completed.
+- and the compilation environment must be configured as described previously.
 
 The generated `.bin` executable can then be uploaded manually using:
 
@@ -419,8 +405,7 @@ The generated `.bin` executable can then be uploaded manually using:
 ./uart_upload.sh
 ```
 
-This workflow is useful for testing custom software independently from the default NEORV32 example framework.
-
+This workflow is useful for testing custom software independently from the default NEORV32 software examples.
 ---
 
 ## 10. Adding SEE Mitigation Modules
