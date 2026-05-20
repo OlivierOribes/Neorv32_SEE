@@ -10,16 +10,29 @@ set -e
 # Check arguments
 # -----------------------------------------------------------------------------
 
-if [ $# -ne 2 ]; then
+if [ $# -ne 1 ]; then
     echo
     echo "Usage:"
-    echo "  ./uart_send.sh <file.bin> <uart_port>"
+    echo "  ./uart_send.sh <file.bin> "
     echo
     exit 1
 fi
 
 BINFILE="$1"
-PORT="$2"
+
+# -----------------------------------------------------------------------------
+# Detect FTDI serial port
+# -----------------------------------------------------------------------------
+
+PORT=$(ls /dev/serial/by-id/*FTDI* 2>/dev/null | head -n 1)
+
+if [ -z "$PORT" ]; then
+    echo -e "${RED}ERROR: No FTDI serial port found.${RESET}"
+    exit 1
+fi
+
+echo -e "${YELLOW}Using UART port: $PORT${RESET}"
+
 
 BAUD=19200
 
@@ -35,17 +48,6 @@ if [ ! -f "$BINFILE" ]; then
     exit 1
 fi
 
-# -----------------------------------------------------------------------------
-# Check UART port
-# -----------------------------------------------------------------------------
-
-if [ ! -e "$PORT" ]; then
-    echo
-    echo "ERROR: UART port not found:"
-    echo "  $PORT"
-    echo
-    exit 1
-fi
 
 # -----------------------------------------------------------------------------
 # Banner
@@ -77,20 +79,12 @@ read -p "Press ENTER when the FPGA is programmed..."
 # Step 2 - Open UART terminal
 # -----------------------------------------------------------------------------
 
-echo
-echo "----------------------------------------------------"
-echo "[STEP 2]"
-echo "Open your UART terminal now."
-echo
-echo "Example:"
-echo "  picocom -b 19200 /dev/ttyUSB0"
-echo
-echo "Keep the terminal open."
-echo "----------------------------------------------------"
-echo
+echo -e "${BLUE1}>>> Opening serial monitor in a new terminal...${RESET}"
 
-read -p "Press ENTER when the UART terminal is ready..."
-
+gnome-terminal -- bash -c "
+picocom -b $BAUD --nolock \"$PORT\"
+exec bash
+"
 # -----------------------------------------------------------------------------
 # Step 3 - Reset CPU / Abort autoboot
 # -----------------------------------------------------------------------------
@@ -158,6 +152,8 @@ stty -F "$PORT" \
 exec 3>"$PORT"
 
 FILESIZE=$(stat -c%s "$BINFILE")
+
+sleep 2
 
 echo
 echo "Sending binary..."

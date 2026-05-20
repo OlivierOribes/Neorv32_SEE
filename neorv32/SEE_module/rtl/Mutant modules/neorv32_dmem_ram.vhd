@@ -68,7 +68,6 @@ architecture neorv32_dmem_ram_rtl of neorv32_dmem_ram is
   -- Signals
   signal fault_word_addr : std_ulogic_vector(AWIDTH-3 downto 0);
   signal randvect        : std_ulogic_vector(31 downto 0) := x"A5C3F19B";
-  signal next_rand       : std_ulogic_vector(31 downto 0);  -- combinatorial next LFSR state
   signal atbit_comb      : std_ulogic_vector(4 downto 0);   -- combinatorial target bit index
   signal faulted_bit     : std_ulogic_vector(31 downto 0);  -- combinatorial fault mask
 
@@ -79,16 +78,12 @@ begin
     "[NEORV32] Using default DMEM RAM component (" &
     natural'image(2**AWIDTH) & " bytes)." severity note;
 
-  ---------------------------------------------------------------------------
-  -- Combinatorial LFSR Advancement
-  ---------------------------------------------------------------------------
-  next_rand  <= fibo_lfsr(randvect);
 
   -- Target bit index for SBU (derived combinatorially from next_rand)
-  atbit_comb <= next_rand(4 downto 0);
+  atbit_comb <= randvect(4 downto 0);
 
   -- Word-aligned target address (derived combinatorially from next_rand)
-  fault_word_addr <= next_rand(AWIDTH-3 downto 0);
+  fault_word_addr <= randvect(AWIDTH-3 downto 0);
 
   -- Full byte address reconstruction (2 LSBs forced to 00 for word alignment)
   faulted_address <= (31 downto AWIDTH => '0') & fault_word_addr & "00";
@@ -139,7 +134,7 @@ begin
       elsif (fault_enable = '1') and (fault_trigger = '1') then
         
         -- Advance the LFSR for the next injection cycle
-        randvect <= next_rand;
+        randvect  <= fibo_lfsr(randvect);
 
       end if;
     end if;

@@ -14,6 +14,7 @@ use ieee.std_logic_1164.all;
 library neorv32;
 use neorv32.neorv32_package.all;
 
+
 entity neorv32_dmem is
   generic (
     MEM_SIZE : natural; -- memory size in bytes, has to be a power of 2, min 4

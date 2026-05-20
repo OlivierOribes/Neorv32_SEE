@@ -192,18 +192,22 @@ begin
 
     SIM : process
 
-        constant N             : natural := 1000;
-        variable total_error   : natural := 0;
-        variable error_count1  : natural := 0;
-        variable error_count2  : natural := 0;
-        variable error_count3  : natural := 0;
-        variable error_count4  : natural := 0;
-        variable error_count5  : natural := 0;
-        variable randvect      : std_ulogic_vector(31 downto 0) := x"A5C3F19B";
-        variable data_fault    : std_ulogic_vector(31 downto 0);
-        variable bitpos        : natural range 0 to 31;
-        variable fault_mask    : std_ulogic_vector(31 downto 0); 
-        variable expected_mask : std_ulogic_vector(31 downto 0); 
+        constant N                      : natural := 1000;
+        constant seed                   : std_ulogic_vector(31 downto 0) := x"A5C3F19B";
+        variable total_error            : natural := 0;
+        variable error_count1           : natural := 0;
+        variable error_count2           : natural := 0;
+        variable error_count3           : natural := 0;
+        variable error_count4           : natural := 0;
+        variable error_count5           : natural := 0;
+        variable error_count6           : natural := 0;
+        variable randvect               : std_ulogic_vector(31 downto 0) := seed;
+        variable data_fault             : std_ulogic_vector(31 downto 0);
+        variable bitpos                 : natural range 0 to 31;
+        variable fault_mask             : std_ulogic_vector(31 downto 0); 
+        variable expected_mask          : std_ulogic_vector(31 downto 0); 
+        variable saved_faulted_address  : std_ulogic_vector(31 downto 0); 
+        variable saved_at_bit           : std_ulogic_vector(4 downto 0); 
 
     begin
 
@@ -354,7 +358,7 @@ begin
     
         fault_enable  <= '1';
 
-        wait until rising_edge(clk_i);  
+        wait until rising_edge(clk_i);
         wait for 1 ns;
 
         for i in 1 to N loop
@@ -362,7 +366,10 @@ begin
             randvect := fibo_lfsr(randvect);
 
             fault_trigger <= randvect(0);
+            saved_at_bit  := at_bit;  -- capture before clock edge: DUT LFSR hasn't advanced yet
 
+            wait until rising_edge(clk_i);
+            wait until rising_edge(clk_i);
             wait until rising_edge(clk_i);
             wait for 1 ns;
 
@@ -388,11 +395,12 @@ begin
 
             else 
                 
+                -- saved_at_bit = pre-trigger LFSR state = actual faulted bit position
                 data_fault := clean_data;
-                data_fault(to_integer(unsigned(at_bit))) := not data_fault(to_integer(unsigned(at_bit)));
+                data_fault(to_integer(unsigned(saved_at_bit))) := not data_fault(to_integer(unsigned(saved_at_bit)));
 
                 expected_mask := (others => '0');
-                expected_mask(to_integer(unsigned(at_bit))) := '1';
+                expected_mask(to_integer(unsigned(saved_at_bit))) := '1';
 
                 if ((clean_data xor faulted_data) /= expected_mask) then
                 
@@ -462,6 +470,8 @@ begin
             mask <= fault_mask;
 
             wait until rising_edge(clk_i);
+            wait until rising_edge(clk_i);  
+            wait until rising_edge(clk_i);    
             wait for 1 ns;
             
             if (fault_trigger = '0') then
@@ -509,21 +519,119 @@ begin
         end if;
         
 
-        -- =========================================================================
-        -- TEST RST_N : synchronous active-low reset
-        -- -------------------------------------------------------------------------
-        -- Verifies that after reset:
-        --   - randvect is restored to seed x"A5C3F19B"
-        --   - at_bit is cleared to 0
-        -- Since randvect is internal, we observe its effect indirectly:
-        --   two consecutive injections after reset must produce the same
-        --   faulted_address and at_bit as two fresh injections from the seed.
-        -- =========================================================================
-        --report "Starting TEST RST_N..." severity note;
+    -- =========================================================================
+    -- TEST RST_N : synchronous active-low reset
+    -- -------------------------------------------------------------------------
+    -- Verifies that after reset:
+    --   - internal LFSR restarts from seed x"A5C3F19B"
+    --   - at_bit is restored identically
+    --
+    -- Principle:
+    --   1) Apply reset
+    --   2) Perform one injection and save outputs
+    --   3) Apply reset again
+    --   4) Perform the same injection again
+    --   5) Compare results
+    --
+    -- If reset correctly restores the seed, both injections must produce
+    -- identical outputs.
+    -- =========================================================================
+
+    report "Starting TEST RST_N..." severity note;
+
+    fault_MBU <= '0';
+
+    ---------------------------------------------------------------------------
+    -- FIRST RESET
+    ---------------------------------------------------------------------------
+    rst_n <= '0';
+
+    wait until rising_edge(clk_i);
+    wait for 1 ns;
+
+    rst_n <= '1';
+
+    wait until rising_edge(clk_i);
+    wait for 1 ns;
+
+    ---------------------------------------------------------------------------
+    -- FIRST INJECTION
+    ---------------------------------------------------------------------------
+    fault_enable  <= '1';
+    fault_trigger <= '1';
+
+    wait until rising_edge(clk_i);
+    wait for 1 ns;
+
+    fault_enable  <= '0';
+    fault_trigger <= '0';
+
+    -- Save outputs after first injection
+    saved_faulted_address := faulted_address;
+    saved_at_bit          := at_bit;
+
+    ---------------------------------------------------------------------------
+    -- SECOND RESET
+    ---------------------------------------------------------------------------
+    rst_n <= '0';
+
+    wait until rising_edge(clk_i);
+    wait for 1 ns;
+
+    rst_n <= '1';
+
+    wait until rising_edge(clk_i);
+    wait for 1 ns;
+
+    ---------------------------------------------------------------------------
+    -- SECOND INJECTION
+    ---------------------------------------------------------------------------
+    fault_enable  <= '1';
+    fault_trigger <= '1';
 
 
+    wait until rising_edge(clk_i);
+    wait for 1 ns;
 
-        total_error := error_count1 + error_count2 + error_count3 + error_count4 + error_count5;
+    fault_enable  <= '0';
+    fault_trigger <= '0';
+
+    ---------------------------------------------------------------------------
+    -- CHECK RESULTS
+    ---------------------------------------------------------------------------
+    if (faulted_address /= saved_faulted_address) then
+
+        report "ERROR: faulted_address differs after reset" & LF &
+            "Expected : " & to_hstring(saved_faulted_address) & LF &
+            "Got      : " & to_hstring(faulted_address)
+            severity error;
+
+        error_count6 := error_count6 + 1;
+
+    end if;
+
+    if (at_bit /= saved_at_bit) then
+
+        report "ERROR: at_bit differs after reset" & LF &
+            "Expected : " & to_hstring(saved_at_bit) & LF &
+            "Got      : " & to_hstring(at_bit)
+            severity error;
+
+        error_count6 := error_count6 + 1;
+
+    end if;
+
+    ---------------------------------------------------------------------------
+    -- FINAL RESULT
+    ---------------------------------------------------------------------------
+    if (error_count6 = 0) then
+        report "All TEST 6 passed." severity note;
+    else
+        report "Failure" severity failure;
+    end if;
+
+
+        total_error := error_count1 + error_count2 + error_count3 + error_count4 + error_count5 + error_count6;
 
         -- ================================================================
         -- End of simulation
