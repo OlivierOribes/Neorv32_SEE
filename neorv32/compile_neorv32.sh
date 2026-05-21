@@ -90,13 +90,13 @@ echo -e "${BLUE1}>>> Opening serial monitor in a new terminal...${RESET}"
 rm -f "$LOGFILE"
 
 gnome-terminal -- bash -c "
-echo -e '${CYAN}====================================================${RESET}'
-echo -e '${YELLOW} Picocom Shortcuts:${RESET}'
-echo -e '${MAGENTA} CTRL+A CTRL+X ${RESET}- Exit picocom'
-echo -e '${MAGENTA} CTRL+A CTRL+Q ${RESET}- Quit without reset'
-echo -e '${MAGENTA} CTRL+A CTRL+U ${RESET}- Upload file'
-echo -e '${MAGENTA} CTRL+A CTRL+H ${RESET}- Help menu'
-echo -e '${CYAN}====================================================${RESET}'
+printf '${CYAN}====================================================${RESET}\n'
+printf '${YELLOW} Picocom Shortcuts:${RESET}\n'
+printf '${MAGENTA} CTRL+A CTRL+X ${RESET}- Exit picocom\n'
+printf '${MAGENTA} CTRL+A CTRL+Q ${RESET}- Quit without reset\n'
+printf '${MAGENTA} CTRL+A CTRL+U ${RESET}- Upload file\n'
+printf '${MAGENTA} CTRL+A CTRL+H ${RESET}- Help menu\n'
+printf '${CYAN}====================================================${RESET}\n'
 
 picocom -b $BAUD --nolock --logfile $LOGFILE \"$PORT\"
 

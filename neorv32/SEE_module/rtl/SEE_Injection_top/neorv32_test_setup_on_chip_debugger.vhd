@@ -24,8 +24,9 @@ entity neorv32_test_setup_on_chip_debugger is
   port (
     -- Global control --
     clk_i       : in  std_ulogic;
-    btn0        : in  std_ulogic;
-    btn1        : in  std_ulogic;
+    btn0        : in  std_ulogic; -- Reset button
+    btn1        : in  std_ulogic; -- SEU trigger button
+    btn2	: in  std_ulogic; -- SET trigger button
     -- JTAG on-chip debugger interface --
     jtag_tck_i  : in  std_ulogic;
     jtag_tdi_i  : in  std_ulogic;
@@ -71,10 +72,15 @@ architecture neorv32_test_setup_on_chip_debugger_rtl of neorv32_test_setup_on_ch
   signal s_faulted_address : std_ulogic_vector(31 downto 0);
   signal s_at_bit          : std_ulogic_vector(4 downto 0);
 
-  -- Debouncer
+  -- Debouncer BT1
   signal debounce_cnt  : natural range 0 to 1250000 := 0;
   signal btn1_stable   : std_ulogic := '0';
   signal fault_pulse   : std_ulogic := '0';
+  
+  -- Debouncer BT2
+  signal debounce_cnt2  : natural range 0 to 1250000 := 0;
+  signal btn2_stable   : std_ulogic := '0';
+  signal fault_pulse2   : std_ulogic := '0';
 
 begin
 
@@ -112,6 +118,36 @@ begin
     end if;
   end process debouncer;
 
+  ---------------------------------------------------------------------------
+  -- Debouncer BTN2 → fault_pulse (1 seul cycle par appui)
+  ---------------------------------------------------------------------------
+
+  debouncer2 : process(clk_i)
+  begin
+
+    if rising_edge(clk_i) then
+
+      fault_pulse2 <= '0';
+
+      if (btn2 = '1' ) then
+        if (debounce_cnt2 < 1_250_000) then  -- 1250000 × 8 ns ~ 10 ms
+          debounce_cnt2 <= debounce_cnt2 + 1; 
+
+        else   
+          if (btn2_stable = '0') then
+
+            fault_pulse2 <= '1';
+            btn2_stable <= '1';
+          
+          end if;
+        end if;
+      else 
+        
+        debounce_cnt2 <= 0;
+        btn2_stable  <= '0'; 
+      end if;
+    end if;
+  end process debouncer2;
 
   -- **************************************************************************************************************************
   -- NEORV32 top instantiation
@@ -138,6 +174,7 @@ begin
     -- Global control --
     clk_i           => clk_i,
     rstn_i          => rstn_i,
+    btn2            => btn2_stable,
     -- JTAG --
     jtag_tck_i      => jtag_tck_i,
     jtag_tdi_i      => jtag_tdi_i,

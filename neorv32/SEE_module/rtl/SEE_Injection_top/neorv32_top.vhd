@@ -288,7 +288,11 @@ entity neorv32_top is
     at_bit          : out std_ulogic_vector(4 downto 0);
     faulted_address : out std_ulogic_vector(31 downto 0);
     clean_data      : out std_ulogic_vector(31 downto 0);
-    faulted_data    : out std_ulogic_vector(31 downto 0)
+    faulted_data    : out std_ulogic_vector(31 downto 0);
+    
+    -- SET Control signal
+    
+    btn2            : in std_ulogic
 
   );
 end neorv32_top;
@@ -613,7 +617,8 @@ begin
       ibus_rsp_i => cpu_i_rsp(i),
       -- data bus interface --
       dbus_req_o => cpu_d_req(i),
-      dbus_rsp_i => cpu_d_rsp(i)
+      dbus_rsp_i => cpu_d_rsp(i),
+      btn2	     => btn2  -- SET trigger signal
     );
 
     -- CPU Instruction Cache ------------------------------------------------------------------

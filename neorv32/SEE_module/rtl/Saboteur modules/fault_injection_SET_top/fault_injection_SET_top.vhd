@@ -76,7 +76,7 @@ use IEEE.numeric_std.all;
 
 entity fault_injection_top is
     generic(
-        DATA_LENGTH       : positive
+        DATA_LENGTH       : positive := 32
     );
     port(
         clk               : in  std_ulogic;
@@ -93,7 +93,10 @@ entity fault_injection_top is
 
         stuckatbit        : in  natural range 0 to DATA_LENGTH-1;
         stuckatvalue      : in  std_ulogic;
-        fault_mask        : in  std_ulogic_vector(DATA_LENGTH-1 downto 0)
+        fault_mask        : in  std_ulogic_vector(DATA_LENGTH-1 downto 0);
+
+        -- SET Trigger button
+        btn2              : in std_ulogic := '0'
     );
 
 end entity fault_injection_top;
@@ -133,7 +136,7 @@ begin
             stuckatbit      => stuckatbit,
             stuckatvalue    => stuckatvalue,
             fault_mask      => fault_mask,
-            match           => match_sig
+            match           => btn2
         );
 
 end architecture rtl;
