@@ -96,11 +96,8 @@ entity neorv32_cpu is
     ibus_rsp_i : in  bus_rsp_t;                      -- response bus
     -- data bus interface --
     dbus_req_o : out bus_req_t;                      -- request bus
-    dbus_rsp_i : in  bus_rsp_t;                       -- response bus
+    dbus_rsp_i : in  bus_rsp_t                       -- response bus
 
-
-    -- SET trigger signal
-    btn2      : in std_ulogic := '0'
   );
 end neorv32_cpu;
 
@@ -149,7 +146,27 @@ architecture neorv32_cpu_rtl of neorv32_cpu is
 
   -- SET injection fault signals
 
-  signal faulted_data : std_ulogic_vector(31 downto 0);
+  signal faulted_data    : std_ulogic_vector(31 downto 0);
+
+  -- ALU duplication signals
+
+  type alu_data_array is array (0 to 2) of std_ulogic_vector(31 downto 0);
+  type alu_cmp_array is array(0 to 2) of std_ulogic_vector(1 downto 0);
+
+
+  signal res_alu_arr : alu_data_array;
+  signal cmp_alu_arr : alu_cmp_array;
+  signal add_alu_arr : alu_data_array;
+
+  signal res_alu_0 : std_ulogic_vector(31 downto 0);
+  signal res_alu_1 : std_ulogic_vector(31 downto 0);
+  signal res_alu_2 : std_ulogic_vector(31 downto 0);
+
+
+  signal alu_error     : std_ulogic;
+  signal res_alu_voter : std_ulogic_vector(31 downto 0);
+  signal cmp_alu_voter : std_ulogic_vector(1 downto 0);
+  signal add_alu_voter : std_ulogic_vector(31 downto 0);
 
   -- VIO intermediate signals (VIO probe_out → fault_injection_top)
 
@@ -172,7 +189,6 @@ architecture neorv32_cpu_rtl of neorv32_cpu is
   component vio_1
   port (
     clk        : in  std_logic;
-
     -- Hardware Manager -> design
     probe_out0 : out std_logic;
     probe_out1 : out std_logic;
@@ -180,15 +196,36 @@ architecture neorv32_cpu_rtl of neorv32_cpu is
     probe_out3 : out std_logic;
     probe_out4 : out std_logic_vector(3 downto 0);
     probe_out5 : out std_logic_vector(31 downto 0);
-    probe_out6 : out std_logic;
-
-    -- Design -> Hardware Manager
-    probe_in0  : in  std_logic_vector(31 downto 0);
-    probe_in1  : in  std_logic_vector(31 downto 0);
-    probe_in2  : in  std_logic_vector(31 downto 0)
+    probe_out6 : out std_logic
   );
+
   end component;
   
+  
+  -- **************************************************************************************************************************
+  -- ILA component declaration
+  -- **************************************************************************************************************************
+  attribute mark_debug : string;
+  attribute keep       : string;
+
+
+  attribute mark_debug of faulted_data          : signal is "true";
+  attribute keep       of faulted_data          : signal is "true";
+  
+  attribute mark_debug of rs1                   : signal is "true";
+  attribute keep       of rs1                   : signal is "true";
+  
+  attribute mark_debug of res_alu_0             : signal is "true";
+  attribute keep       of res_alu_0             : signal is "true";
+  
+  attribute mark_debug of res_alu_1             : signal is "true";
+  attribute keep       of res_alu_1             : signal is "true";
+  
+  attribute mark_debug of res_alu_2             : signal is "true";
+  attribute keep       of res_alu_2             : signal is "true";
+
+  attribute mark_debug of res_alu_voter          : signal is "true";
+  attribute keep       of res_alu_voter          : signal is "true";
 
 begin
 
@@ -345,8 +382,8 @@ begin
     hwtrig_i      => hwtrig,      -- hardware trigger
     -- data path interface --
     alu_cp_done_i => alu_cp_done, -- ALU iterative operation done
-    alu_cmp_i     => alu_cmp,     -- comparator status
-    alu_add_i     => alu_add,     -- ALU address result
+    alu_cmp_i     => cmp_alu_voter,     -- comparator status
+    alu_add_i     => add_alu_voter,     -- ALU address result
     rf_rs1_i      => rs1,         -- register file source 1
     csr_rdata_o   => csr_rdata,   -- CSR read data
     xcsr_rdata_i  => xcsr_res,    -- external CSR read data
@@ -453,7 +490,11 @@ begin
   );
 
   -- all buses are zero unless there is an according operation --
-  rf_wdata <= alu_res or lsu_rdata or csr_rdata or ctrl.pc_ret;
+  
+  --rf_wdata <= alu_res or lsu_rdata or csr_rdata or ctrl.pc_ret;
+
+  -- TMR modification 
+  rf_wdata <= res_alu_voter or lsu_rdata or csr_rdata or ctrl.pc_ret;
 
 
   -- **************************************************************************************************************************
@@ -470,18 +511,12 @@ begin
       probe_out1 => vio_permanent_fault,
       probe_out2 => vio_stuckatbit,
       probe_out3 => vio_stuckatvalue,
-
-
       probe_out4 => vio_bits_to_match,
       probe_out5 => vio_mask,
-      probe_out6 => vio_transient_fault,
+      probe_out6 => vio_transient_fault
 
-      -- probe_in: fault_injection_top → Hardware Manager --
-      probe_in0  => std_logic_vector(faulted_data),
-      probe_in1  => std_logic_vector(rs1),
-      probe_in2  => std_logic_vector(alu_res)
     );
-    
+  
   -- ===========================================================================================
   -- Single Event Transient (SET) fault injection in ALU module
   -- ===========================================================================================
@@ -505,15 +540,19 @@ begin
 
     stuckatbit        => to_integer(unsigned(vio_stuckatbit)),
     stuckatvalue      => vio_stuckatvalue,
-    fault_mask        => std_ulogic_vector(vio_mask),
-
-    btn2              => btn2
+    fault_mask        => std_ulogic_vector(vio_mask)
   );
+  
+  -- ===========================================================================================
+  -- ===========================================================================================
 
+
+
+  -- Generate three ALU for TMR module test
 
   -- Arithmetic/Logic Unit (ALU) and ALU Co-Processors -----------------------------------------
   -- -------------------------------------------------------------------------------------------
-  neorv32_cpu_alu_inst: entity neorv32.neorv32_cpu_alu
+  neorv32_cpu_alu_inst0: entity neorv32.neorv32_cpu_alu
   generic map (
     -- RISC-V ISA Extensions --
     RISCV_ISA_M      => RISCV_ISA_M,      -- mul/div extension
@@ -547,19 +586,150 @@ begin
     rs1_i  => faulted_data,        -- rf source 1
     rs2_i  => rs2,                 -- rf source 2
     -- data output --
-    cmp_o  => alu_cmp,    -- comparator status
-    res_o  => alu_res,    -- ALU result
-    add_o  => alu_add,    -- address computation result
+    cmp_o  => cmp_alu_arr(0),    -- comparator status
+    res_o  => res_alu_arr(0),    -- ALU result
+    add_o  => add_alu_arr(0),    -- address computation result
+    csr_o  => open,   -- CSR read data
+    -- status --
+    done_o => open -- iterative processing units done?
+  );  
+  
+  -- ===========================================================================================
+  -- ===========================================================================================
+
+
+  neorv32_cpu_alu_inst1: entity neorv32.neorv32_cpu_alu
+  generic map (
+    -- RISC-V ISA Extensions --
+    RISCV_ISA_M      => RISCV_ISA_M,      -- mul/div extension
+    RISCV_ISA_Zba    => RISCV_ISA_Zba,    -- address-generation instruction
+    RISCV_ISA_Zbb    => RISCV_ISA_Zbb,    -- basic bit-manipulation instruction
+    RISCV_ISA_Zbc    => RISCV_ISA_Zbc,    -- carry-less multiplication instructions
+    RISCV_ISA_Zbkb   => RISCV_ISA_Zbkb,   -- bit-manipulation instructions for cryptography
+    RISCV_ISA_Zbkc   => RISCV_ISA_Zbkc,   -- carry-less multiplication instructions
+    RISCV_ISA_Zbkx   => RISCV_ISA_Zbkx,   -- cryptography crossbar permutation extension
+    RISCV_ISA_Zbs    => RISCV_ISA_Zbs,    -- single-bit instructions
+    RISCV_ISA_Zfinx  => RISCV_ISA_Zfinx,  -- 32-bit floating-point extension
+    RISCV_ISA_Zibi   => RISCV_ISA_Zibi,   -- branch with immediate
+    RISCV_ISA_Zicond => RISCV_ISA_Zicond, -- integer conditional operations
+    RISCV_ISA_Zknd   => RISCV_ISA_Zknd,   -- cryptography NIST AES decryption extension
+    RISCV_ISA_Zkne   => RISCV_ISA_Zkne,   -- cryptography NIST AES encryption extension
+    RISCV_ISA_Zknh   => RISCV_ISA_Zknh,   -- cryptography NIST hash extension
+    RISCV_ISA_Zksed  => RISCV_ISA_Zksed,  -- ShangMi block cipher extension
+    RISCV_ISA_Zksh   => RISCV_ISA_Zksh,   -- ShangMi hash extension
+    RISCV_ISA_Zmmul  => RISCV_ISA_Zmmul,  -- multiply-only M sub-extension
+    RISCV_ISA_Xcfu   => RISCV_ISA_Xcfu,   -- custom (instr.) functions unit
+    -- Tuning Options --
+    FAST_MUL_EN      => CPU_FAST_MUL_EN,  -- use DSPs for M extension's multiplier
+    FAST_SHIFT_EN    => CPU_FAST_SHIFT_EN -- use barrel shifter for shift operations
+  )
+  port map (
+    -- global control --
+    clk_i  => clk_i,      -- global clock, rising edge
+    rstn_i => rstn_i,     -- global reset, low-active, async
+    ctrl_i => ctrl,       -- main control bus
+    -- data input --
+    rs1_i  => rs1,        -- rf source 1
+    rs2_i  => rs2,                 -- rf source 2
+    -- data output --
+    cmp_o  => cmp_alu_arr(1),    -- comparator status
+    res_o  => res_alu_arr(1),    -- ALU result
+    add_o  => add_alu_arr(1),    -- address computation result
+    csr_o  => open,   -- CSR read data
+    -- status --
+    done_o => open -- iterative processing units done?
+  );  
+  
+  -- ===========================================================================================
+  -- ===========================================================================================
+
+
+  neorv32_cpu_alu_inst2: entity neorv32.neorv32_cpu_alu
+  generic map (
+    -- RISC-V ISA Extensions --
+    RISCV_ISA_M      => RISCV_ISA_M,      -- mul/div extension
+    RISCV_ISA_Zba    => RISCV_ISA_Zba,    -- address-generation instruction
+    RISCV_ISA_Zbb    => RISCV_ISA_Zbb,    -- basic bit-manipulation instruction
+    RISCV_ISA_Zbc    => RISCV_ISA_Zbc,    -- carry-less multiplication instructions
+    RISCV_ISA_Zbkb   => RISCV_ISA_Zbkb,   -- bit-manipulation instructions for cryptography
+    RISCV_ISA_Zbkc   => RISCV_ISA_Zbkc,   -- carry-less multiplication instructions
+    RISCV_ISA_Zbkx   => RISCV_ISA_Zbkx,   -- cryptography crossbar permutation extension
+    RISCV_ISA_Zbs    => RISCV_ISA_Zbs,    -- single-bit instructions
+    RISCV_ISA_Zfinx  => RISCV_ISA_Zfinx,  -- 32-bit floating-point extension
+    RISCV_ISA_Zibi   => RISCV_ISA_Zibi,   -- branch with immediate
+    RISCV_ISA_Zicond => RISCV_ISA_Zicond, -- integer conditional operations
+    RISCV_ISA_Zknd   => RISCV_ISA_Zknd,   -- cryptography NIST AES decryption extension
+    RISCV_ISA_Zkne   => RISCV_ISA_Zkne,   -- cryptography NIST AES encryption extension
+    RISCV_ISA_Zknh   => RISCV_ISA_Zknh,   -- cryptography NIST hash extension
+    RISCV_ISA_Zksed  => RISCV_ISA_Zksed,  -- ShangMi block cipher extension
+    RISCV_ISA_Zksh   => RISCV_ISA_Zksh,   -- ShangMi hash extension
+    RISCV_ISA_Zmmul  => RISCV_ISA_Zmmul,  -- multiply-only M sub-extension
+    RISCV_ISA_Xcfu   => RISCV_ISA_Xcfu,   -- custom (instr.) functions unit
+    -- Tuning Options --
+    FAST_MUL_EN      => CPU_FAST_MUL_EN,  -- use DSPs for M extension's multiplier
+    FAST_SHIFT_EN    => CPU_FAST_SHIFT_EN -- use barrel shifter for shift operations
+  )
+  port map (
+    -- global control --
+    clk_i  => clk_i,      -- global clock, rising edge
+    rstn_i => rstn_i,     -- global reset, low-active, async
+    ctrl_i => ctrl,       -- main control bus
+    -- data input --
+    rs1_i  => rs1,        -- rf source 1
+    rs2_i  => rs2,        -- rf source 2
+    -- data output --
+    cmp_o  => cmp_alu_arr(2),    -- comparator status
+    res_o  => res_alu_arr(2),    -- ALU result
+    add_o  => add_alu_arr(2),    -- address computation result
     csr_o  => xcsr_alu,   -- CSR read data
     -- status --
     done_o => alu_cp_done -- iterative processing units done?
+  );  
+
+  -- ===========================================================================================
+  -- ===========================================================================================
+
+  tmr : entity neorv32.tmr_neorv32_alu_voter 
+  generic map(
+    DATA_LENGTH => 32
+  )
+  port map(
+
+    -- TMR input 
+    res_a_i => res_alu_arr(0),
+    res_b_i => res_alu_arr(1),
+    res_c_i => res_alu_arr(2),
+    
+    add_a_i => add_alu_arr(0),
+    add_b_i => add_alu_arr(1),
+    add_c_i => add_alu_arr(2),
+
+    cmp_a_i => cmp_alu_arr(0),
+    cmp_b_i => cmp_alu_arr(1),
+    cmp_c_i => cmp_alu_arr(2),
+
+    -- TMR output
+    res_o     => res_alu_voter,
+    add_o     => add_alu_voter,
+    cmp_o     => cmp_alu_voter,
+    err_o     => alu_error
   );
 
-  -- ===========================================================================================
-  -- ===========================================================================================
-  -- ===========================================================================================
+
+  -- ILA probes for TMR comparison
+  res_alu_0 <= res_alu_arr(0);
+  res_alu_1 <= res_alu_arr(1);
+  res_alu_2 <= res_alu_arr(2);
 
 
+  -- assign output of the ALU
+  alu_res   <= res_alu_voter;
+  alu_cmp   <= cmp_alu_voter;
+  alu_add   <= add_alu_voter;   
+
+
+  -- ===========================================================================================
+  -- ===========================================================================================
 
 
   -- Load/Store Unit (LSU) ------------------------------------------------------------------
@@ -575,7 +745,7 @@ begin
     rstn_i      => rstn_i,     -- global reset, low-active, async
     ctrl_i      => ctrl,       -- main control bus
     -- memory data access interface --
-    addr_i      => alu_add,    -- access address
+    addr_i      => add_alu_voter,    -- access address
     wdata_i     => rs2,        -- write data
     rdata_o     => lsu_rdata,  -- read data
     mar_o       => lsu_mar,    -- memory address register
@@ -613,7 +783,7 @@ begin
       i_priv_i => if_pmp_priv,   -- access privilege
       i_err_o  => if_pmp_err,    -- PMP fault
       -- data access check --
-      d_addr_i => alu_add,       -- access address
+      d_addr_i => add_alu_voter,       -- access address
       d_priv_i => ctrl.lsu_priv, -- access privilege
       d_err_o  => rw_pmp_err     -- PMP fault
     );

@@ -93,10 +93,8 @@ entity fault_injection_top is
 
         stuckatbit        : in  natural range 0 to DATA_LENGTH-1;
         stuckatvalue      : in  std_ulogic;
-        fault_mask        : in  std_ulogic_vector(DATA_LENGTH-1 downto 0);
+        fault_mask        : in  std_ulogic_vector(DATA_LENGTH-1 downto 0)
 
-        -- SET Trigger button
-        btn2              : in std_ulogic := '0'
     );
 
 end entity fault_injection_top;
@@ -128,6 +126,7 @@ begin
             DATA_LENGTH => DATA_LENGTH
         )
         port map(
+            clk             => clk,
             data_in         => data_in,
             data_out        => data_out,
             fault_enable    => fault_enable,
@@ -136,7 +135,7 @@ begin
             stuckatbit      => stuckatbit,
             stuckatvalue    => stuckatvalue,
             fault_mask      => fault_mask,
-            match           => btn2
+            match           => match_sig
         );
 
 end architecture rtl;

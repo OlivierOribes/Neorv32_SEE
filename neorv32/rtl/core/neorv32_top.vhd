@@ -148,7 +148,7 @@ entity neorv32_top is
     IO_TRNG_NUM_RBIT    : natural range 8 to 4096        := 64;            -- number of raw bits to process for one output byte; has to be power of two
 
     -- Custom Functions Subsystem (CFS) --
-    IO_CFS_EN           : boolean                        := false;         -- implement custom functions subsystem (CFS)
+    IO_CFS_EN           : boolean                        := true;         -- implement custom functions subsystem (CFS)
 
     -- Smart LED interface (NEOLED) --
     IO_NEOLED_EN        : boolean                        := false;         -- implement NeoPixel-compatible smart LED interface (NEOLED)
@@ -277,18 +277,7 @@ entity neorv32_top is
     -- CPU interrupts --
     irq_msi_i      : in  std_ulogic := 'L';                                  -- machine software interrupt, available if IO_CLINT_EN = false
     irq_mti_i      : in  std_ulogic := 'L';                                  -- machine timer interrupt, available if IO_CLINT_EN = false
-    irq_mei_i      : in  std_ulogic := 'L';                                   -- machine external interrupt
-
-
-    -- SEU Control signal
-    fault_enable    : in  std_ulogic := '0';
-    fault_trigger   : in  std_ulogic := '0';
-    fault_MBU       : in  std_ulogic := '0';
-    mask            : in  std_ulogic_vector(31 downto 0) := (others => '0');
-    at_bit          : out std_ulogic_vector(4 downto 0);
-    faulted_address : out std_ulogic_vector(31 downto 0);
-    clean_data      : out std_ulogic_vector(31 downto 0);
-    faulted_data    : out std_ulogic_vector(31 downto 0)
+    irq_mei_i      : in  std_ulogic := 'L'                                   -- machine external interrupt
 
   );
 end neorv32_top;
@@ -382,8 +371,6 @@ architecture neorv32_top_rtl of neorv32_top is
   -- system time (mtime) --
   signal mtime : std_ulogic_vector(63 downto 0);
   signal mtime_lo : std_ulogic_vector(31 downto 0);
-
-
 
 begin
 
@@ -909,26 +896,16 @@ begin
     neorv32_dmem_enabled:
     if DMEM_EN generate
       neorv32_dmem_inst: entity neorv32.neorv32_dmem
-    generic map (
-      MEM_SIZE => dmem_size_c,
-      OUTREG   => DMEM_OUTREG_EN
-    )
-    port map (
-      clk_i           => clk_i,
-      rstn_i          => rstn_sys,
-      bus_req_i       => dmem_req,
-      bus_rsp_o       => dmem_rsp,
-
-      -- SEU port
-      fault_enable    => fault_enable,
-      fault_trigger   => fault_trigger,
-      at_bit          => at_bit,
-      faulted_address => faulted_address,
-      clean_data      => clean_data,
-      faulted_data    => faulted_data,
-      fault_MBU       => fault_MBU,
-      mask            => mask
-    );
+      generic map (
+        MEM_SIZE => dmem_size_c,
+        OUTREG   => DMEM_OUTREG_EN
+      )
+      port map (
+        clk_i     => clk_i,
+        rstn_i    => rstn_sys,
+        bus_req_i => dmem_req,
+        bus_rsp_o => dmem_rsp
+      );
     end generate;
 
     neorv32_dmem_disabled:
@@ -1677,6 +1654,5 @@ begin
     dci_ndmrstn          <= '1';
     dci_haltreq          <= (others => '0');
   end generate;
-  
 
 end neorv32_top_rtl;
