@@ -405,7 +405,8 @@ The generated `.bin` executable can then be uploaded manually using:
 ./uart_upload.sh
 ```
 
-This workflow is useful for testing custom software independently from the default NEORV32 software examples.
+<p>This workflow is useful for testing custom software separately from the default NEORV32 software examples.</p>
+
 ---
 
 ## 10. Adding SEE Mitigation Modules
@@ -451,6 +452,31 @@ Recommended workflow for developing a new SEE mitigation module:
 7. Analyze timing, utilisation, and reliability overhead
 8. Commit validated modifications and experimental results
 ```
+
+### SEE Fault Injection Module
+
+Dedicated fault-injection infrastructure for emulating radiation-induced effects on the NEORV32 SoC, located in `neorv32/SEE_module/`.
+
+Two fault models are covered:
+
+- **SEU (Single Event Upset)** — bit-flip in a storage element (DMEM)
+- **SET (Single Event Transient)** — transient glitch on a combinational path
+
+**Two injection strategies are implemented:**
+
+| Strategy | Target | Approach |
+|----------|--------|----------|
+| **Saboteur** | SET on ALU `rs1` input | External combinational block, runtime-controlled via Vivado VIO |
+| **Saboteur** | SEU on external RAM | FSM performing read-modify-write on the memory bus |
+| **Mutant module** *(preferred)* | SEU in NEORV32 DMEM | Modified `neorv32_dmem` using a TDP BRAM with an independent SEU FSM on Port B |
+
+The mutant module approach is preferred for SEU because it injects directly inside the BRAM via a dedicated port, leaving the CPU access path entirely unaffected. It supports both SBU and MBU modes.
+
+The SET Saboteur sits on the `rs1` signal between the register file and the ALU. All injection parameters (enable, fault type, mask, injection rate) are driven through a Vivado Virtual I/O (VIO) core without requiring physical I/O pins.
+
+Top-level modifications to `neorv32_top` and `neorv32_cpu` propagate injection control signals across the hierarchy.
+
+→ See [`neorv32/SEE_module/`](neorv32/SEE_module/) for the full module documentation.
 
 --- 
 
