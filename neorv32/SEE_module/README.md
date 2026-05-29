@@ -1,7 +1,7 @@
 # SEE Fault Injection Modules — NEORV32
 
 <p align="center">
-  <img src="../../docs/img/Risc-V_for_space.png" width="900">
+  <img src="../../docs/img/injection_fault_image.png" width="900">
 </p>
 
 This directory contains the VHDL modules developed to simulate cosmic radiation effects (SEE — *Single Event Effects*) on the NEORV32 processor implemented on a Zynq FPGA.
